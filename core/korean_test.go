@@ -107,7 +107,7 @@ func TestLongSentense(t *testing.T) {
 	data := model.Predict(model.Tokenizer.Tokens[selects])
 	fmt.Printf("Input: %s, Predict: %s\n", selects, model.Tokenizer.GetToken(data))
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 9; i++ {
 		data = model.Predict(data)
 		if model.Tokenizer.GetToken(data) == ENDTOKEN {
 			break
