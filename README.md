@@ -1,1 +1,2 @@
-# markov-ammumal-bot
+# ammumal-bot-v2
+base on linear regression model
