@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -58,10 +59,7 @@ func TestMakeData(t *testing.T) {
 
 	fmt.Println("Inserting Sentences from outbox.json...")
 	var sentens []string
-	for i, item := range outbox.OrderedItems {
-		if i > 8000 {
-			break
-		}
+	for _, item := range outbox.OrderedItems {
 		// Check if the RawMessage is a JSON object (starts with '{')
 		if len(item.Object) > 0 && item.Object[0] == '{' {
 			var obj Object
@@ -76,11 +74,22 @@ func TestMakeData(t *testing.T) {
 		// If item.Object is a string (URL), it's ignored.
 	}
 
+	// Shuffle the collected sentences to get a random sample.
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(sentens), func(i, j int) {
+		sentens[i], sentens[j] = sentens[j], sentens[i]
+	})
+
+	// Limit to 8000 sentences if more are available.
+	if len(sentens) > 7500 {
+		sentens = sentens[:7500]
+	}
+
 	if len(sentens) == 0 {
 		t.Fatal("No sentences extracted from outbox.json")
 	}
 
-	CreateAndTrainModel(sentens, 0.01, 10, "model.bin")
+	CreateAndTrainModel(sentens, 0.1, 5, "model.bin")
 	t.Logf("Model created successfully from %d sentences.", len(sentens))
 }
 
@@ -107,7 +116,7 @@ func TestLongSentense(t *testing.T) {
 	data := model.Predict(model.Tokenizer.Tokens[selects])
 	fmt.Printf("Input: %s, Predict: %s\n", selects, model.Tokenizer.GetToken(data))
 
-	for i := 0; i < 9; i++ {
+	for {
 		data = model.Predict(data)
 		if model.Tokenizer.GetToken(data) == ENDTOKEN {
 			break

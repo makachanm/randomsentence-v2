@@ -10,9 +10,12 @@ import (
 	"os"
 	"randomsentensbot/core"
 	"strings"
+	"time"
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	key := os.Getenv("MSTDN_KEY")
 	server := os.Getenv("MSTDN_SERVER")
 
@@ -36,7 +39,8 @@ func main() {
 	content.WriteString(model.Tokenizer.GetToken(data))
 	content.WriteString(" ")
 
-	for i := 0; i < 8; i++ {
+	// Generate a random length for the sentence between 8 and 20
+	for {
 		data = model.Predict(data)
 		if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
 			break
@@ -44,6 +48,8 @@ func main() {
 		content.WriteString(model.Tokenizer.GetToken(data))
 		content.WriteString(" ")
 	}
+
+	content.WriteString("#GenereatedByBot")
 
 	fmt.Printf("Generated content: %s\n", content.String())
 
