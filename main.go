@@ -47,7 +47,7 @@ func main() {
 	var count int
 
 	for {
-		if count > 100 {
+		if count > 25 {
 			break
 		}
 		count++
