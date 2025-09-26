@@ -81,15 +81,15 @@ func TestMakeData(t *testing.T) {
 	})
 
 	// Limit to 8000 sentences if more are available.
-	if len(sentens) > 8700 {
-		sentens = sentens[:8700]
+	if len(sentens) > 8000 {
+		sentens = sentens[:8000]
 	}
 
 	if len(sentens) == 0 {
 		t.Fatal("No sentences extracted from outbox.json")
 	}
 
-	CreateAndTrainModel(sentens, 0.05, 20, "model.bin")
+	CreateAndTrainModel(sentens, 0.1, 15, "model.bin")
 	t.Logf("Model created successfully from %d sentences.", len(sentens))
 }
 

@@ -44,7 +44,13 @@ func main() {
 	content.WriteString(model.Tokenizer.GetToken(data))
 	content.WriteString(" ")
 
+	var count int
+
 	for {
+		if count > 100 {
+			break
+		}
+		count++
 		data = model.Predict(data)
 		if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
 			break

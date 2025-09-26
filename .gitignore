@@ -1,4 +1,7 @@
 *.json
 *.bin
+*.out
+*.err
+*.log
 run.sh
 randomsentensbot
