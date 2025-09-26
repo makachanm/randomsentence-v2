@@ -90,7 +90,7 @@ func (m *LinearModel) Train(epochs int) {
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		runtime.GC()
-		fmt.Println("Epoch:", epoch)
+		fmt.Print("Epoch:", epoch, " ")
 		gradients := make([][]float32, vocabSize)
 		for i := range gradients {
 			gradients[i] = make([]float32, vocabSize)
@@ -119,5 +119,6 @@ func (m *LinearModel) Train(epochs int) {
 				m.Weights[i][j] -= m.LearningRate * gradients[i][j]
 			}
 		}
+		fmt.Println("Done.")
 	}
 }

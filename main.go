@@ -32,6 +32,11 @@ func main() {
 	selects := pick(model.Tokenizer.Count, *model.Tokenizer)
 	data := model.Predict(model.Tokenizer.Tokens[selects])
 
+	if selects == core.ENDTOKEN || model.Tokenizer.GetToken(data) == core.ENDTOKEN {
+		selects = pick(model.Tokenizer.Count, *model.Tokenizer)
+		data = model.Predict(model.Tokenizer.Tokens[selects])
+	}
+
 	var content strings.Builder
 
 	content.WriteString(selects)
@@ -39,7 +44,6 @@ func main() {
 	content.WriteString(model.Tokenizer.GetToken(data))
 	content.WriteString(" ")
 
-	// Generate a random length for the sentence between 8 and 20
 	for {
 		data = model.Predict(data)
 		if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
@@ -49,7 +53,7 @@ func main() {
 		content.WriteString(" ")
 	}
 
-	content.WriteString("#GenereatedByBot")
+	//content.WriteString("#GenereatedByBot")
 
 	fmt.Printf("Generated content: %s\n", content.String())
 
