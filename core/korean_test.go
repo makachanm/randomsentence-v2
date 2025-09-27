@@ -143,8 +143,8 @@ func TestMakeTotalData(t *testing.T) {
 		rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
 	})
 
-	if len(rdatas) > 5000 {
-		rdatas = rdatas[:5000]
+	if len(rdatas) > 7000 {
+		rdatas = rdatas[:7000]
 	}
 
 	sentens = append(sentens, rdatas...)
@@ -170,15 +170,15 @@ func TestMakeTotalData(t *testing.T) {
 	})
 
 	// Limit to 8000 sentences if more are available.
-	if len(sentens) > 8000 {
-		sentens = sentens[:8000]
+	if len(sentens) > 9500 {
+		sentens = sentens[:9500]
 	}
 
 	if len(sentens) == 0 {
 		t.Fatal("No sentences extracted from outbox.json")
 	}
 
-	CreateAndTrainModel(sentens, 0.01, 20, "model.bin")
+	CreateAndTrainModel(sentens, 0.01, 15, "model.bin")
 	fmt.Printf("Model created successfully from %d sentences.", len(sentens)+len(rdatas))
 }
 

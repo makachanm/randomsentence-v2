@@ -8,25 +8,22 @@ import (
 const ENDTOKEN = "[<EOT>]"
 
 type Tokenizer struct {
-	Tokens     map[string]int
-	UnigramMap map[int]int
-	Count      int
-
-	// Unexported field for memory optimization. It will be used for counting
-	// and then discarded. It won't be saved in the model file.
-	nextTokenCounts map[[2]int]int
+	Tokens      map[string]int
+	UnigramMap  map[int]int
+	Count       int
+	UnigramFreq map[int]map[int]int // Persisted for reward mechanism
 }
 
 func NewTokenizer() *Tokenizer {
 	return &Tokenizer{
-		Tokens:          make(map[string]int),
-		UnigramMap:      make(map[int]int),
-		nextTokenCounts: make(map[[2]int]int), // Use the new efficient structure
-		Count:           0,
+		Tokens:      make(map[string]int),
+		UnigramMap:  make(map[int]int),
+		UnigramFreq: make(map[int]map[int]int),
+		Count:       0,
 	}
 }
 
-// AddToken populates the nextTokenCounts map to track frequencies.
+// AddToken populates the UnigramFreq map to track frequencies.
 func (t *Tokenizer) AddToken(token string, nexttoken string) {
 	// Ensure the first token exists in the dictionary.
 	tokIdx, exists := t.GetTokenIndex(token)
@@ -45,30 +42,29 @@ func (t *Tokenizer) AddToken(token string, nexttoken string) {
 	}
 
 	// Update counts for the next token using the new structure.
-	pair := [2]int{tokIdx, nextIdx}
-	t.nextTokenCounts[pair]++
+	if t.UnigramFreq[tokIdx] == nil {
+		t.UnigramFreq[tokIdx] = make(map[int]int)
+	}
+	t.UnigramFreq[tokIdx][nextIdx]++
 }
 
 // BuildUnigramMap iterates through the counts and selects the most frequent next token for each token.
 func (t *Tokenizer) BuildUnigramMap() {
-	// This map stores the count of the best next token found so far.
-	maxCounts := make(map[int]int)
-
-	for pair, count := range t.nextTokenCounts {
-		tokID := pair[0]
-		nextID := pair[1]
-
-		// Check if the current pair's count is greater than the max count
-		// seen so far for this tokID.
-		if count > maxCounts[tokID] {
-			maxCounts[tokID] = count
-			t.UnigramMap[tokID] = nextID
+	for tokID, freqMap := range t.UnigramFreq {
+		maxFreq := 0
+		bestNextID := -1
+		for nextID, freq := range freqMap {
+			if freq > maxFreq {
+				maxFreq = freq
+				bestNextID = nextID
+			}
+		}
+		if bestNextID != -1 {
+			t.UnigramMap[tokID] = bestNextID
 		}
 	}
 
-	// Free up memory after building the final map.
-	t.nextTokenCounts = nil
-	maxCounts = nil
+	// We no longer clear the frequency map to use it for rewards.
 	runtime.GC()
 }
 

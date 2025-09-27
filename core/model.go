@@ -60,17 +60,32 @@ func softmax(input []float32) []float32 {
 }
 
 // Predict predicts the next token index given the current token index,
-// applying a penalty to previously generated tokens.
+// applying rewards for co-occurrence and penalties for repetition.
 func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int {
 	if currentTokenIndex < 0 || currentTokenIndex >= len(m.Weights) {
-		// Return a random token if the input is out of bounds
-		return rand.Intn(m.Tokenizer.Count)
+		return rand.Intn(m.Tokenizer.Count) // Out of bounds safety
 	}
 
 	scores := m.Weights[currentTokenIndex]
 	probabilities := softmax(scores)
 
-	// Apply repetition penalty
+	// 1. Apply co-occurrence reward
+	rewardFactor := float32(0.5)
+	if freqMap, ok := m.Tokenizer.UnigramFreq[currentTokenIndex]; ok {
+		totalFreq := 0
+		for _, freq := range freqMap {
+			totalFreq += freq
+		}
+
+		if totalFreq > 0 {
+			for nextIdx, freq := range freqMap {
+				reward := rewardFactor * (float32(freq) / float32(totalFreq))
+				probabilities[nextIdx] *= (1.0 + reward)
+			}
+		}
+	}
+
+	// 2. Apply repetition penalty
 	repetitionPenalty := float32(1.5)
 	for _, tokenIndex := range generatedTokens {
 		if tokenIndex >= 0 && tokenIndex < len(probabilities) {
@@ -78,7 +93,18 @@ func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int 
 		}
 	}
 
-	// Select the token with the highest probability after penalty
+	// 3. Re-normalize probabilities
+	var sum float32 = 0.0
+	for _, p := range probabilities {
+		sum += p
+	}
+	if sum > 0 {
+		for i := range probabilities {
+			probabilities[i] /= sum
+		}
+	}
+
+	// 4. Select the token with the highest probability
 	maxProb := float32(-1.0)
 	predictedIndex := 0
 	for i, p := range probabilities {
