@@ -29,74 +29,75 @@ func main() {
 		os.Exit(1)
 	}
 
-	generatedIndices := []int{}
-
-	selects := pick(model.Tokenizer.Count, *model.Tokenizer)
-	initialIndex := model.Tokenizer.Tokens[selects]
-	generatedIndices = append(generatedIndices, initialIndex)
-
-	data := model.Predict(initialIndex, generatedIndices)
-
-	if selects == core.ENDTOKEN || model.Tokenizer.GetToken(data) == core.ENDTOKEN {
-		selects = pick(model.Tokenizer.Count, *model.Tokenizer)
-		initialIndex = model.Tokenizer.Tokens[selects]
-		generatedIndices = []int{initialIndex}
-		data = model.Predict(initialIndex, generatedIndices)
-	}
-	generatedIndices = append(generatedIndices, data)
-
-	var content strings.Builder
-
-	content.WriteString(selects)
-	content.WriteString(" ")
-	content.WriteString(model.Tokenizer.GetToken(data))
-	content.WriteString(" ")
-
-	var count int
-
 	for {
-		if count > 25 {
-			break
-		}
-		count++
-		data = model.Predict(data, generatedIndices)
-		if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
-			break
+		generatedIndices := []int{}
+
+		selects := pick(model.Tokenizer.Count, *model.Tokenizer)
+		initialIndex := model.Tokenizer.Tokens[selects]
+		generatedIndices = append(generatedIndices, initialIndex)
+
+		data := model.Predict(initialIndex, generatedIndices)
+
+		if selects == core.ENDTOKEN || model.Tokenizer.GetToken(data) == core.ENDTOKEN {
+			selects = pick(model.Tokenizer.Count, *model.Tokenizer)
+			initialIndex = model.Tokenizer.Tokens[selects]
+			generatedIndices = []int{initialIndex}
+			data = model.Predict(initialIndex, generatedIndices)
 		}
 		generatedIndices = append(generatedIndices, data)
+
+		var content strings.Builder
+
+		content.WriteString(selects)
+		content.WriteString(" ")
 		content.WriteString(model.Tokenizer.GetToken(data))
 		content.WriteString(" ")
+
+		for i := 0; i < 30; i++ {
+			data = model.Predict(data, generatedIndices)
+			if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
+				break
+			}
+			generatedIndices = append(generatedIndices, data)
+			content.WriteString(model.Tokenizer.GetToken(data))
+			content.WriteString(" ")
+		}
+
+		//content.WriteString("#GenereatedByBot")
+
+		fmt.Printf("Generated content: %s\n", content.String())
+
+		// Post to Mastodon
+		apiURL := fmt.Sprintf("%s/api/v1/statuses", server)
+		formData := url.Values{}
+		formData.Set("status", content.String())
+
+		req, err := http.NewRequest("POST", apiURL, bytes.NewBufferString(formData.Encode()))
+		if err != nil {
+			log.Printf("Error creating request: %v", err)
+			continue
+		}
+
+		req.Header.Set("Authorization", "Bearer "+key)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("Error sending request: %v", err)
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("Failed to post status: %s", resp.Status)
+		} else {
+			fmt.Println("Successfully posted to Mastodon!")
+		}
+
+		fmt.Println("Waiting for 20 minutes...")
+		time.Sleep(20 * time.Minute)
 	}
-
-	//content.WriteString("#GenereatedByBot")
-
-	fmt.Printf("Generated content: %s\n", content.String())
-
-	// Post to Mastodon
-	apiURL := fmt.Sprintf("%s/api/v1/statuses", server)
-	formData := url.Values{}
-	formData.Set("status", content.String())
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBufferString(formData.Encode()))
-	if err != nil {
-		log.Fatalf("Error creating request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatalf("Error sending request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Failed to post status: %s", resp.Status)
-	}
-
-	fmt.Println("Successfully posted to Mastodon!")
 }
 
 func pick(length int, dict core.Tokenizer) string {
