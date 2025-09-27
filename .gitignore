@@ -3,5 +3,7 @@
 *.out
 *.err
 *.log
+.txt
 run.sh
 randomsentensbot
+core/steam.txt

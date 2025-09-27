@@ -90,7 +90,96 @@ func TestMakeData(t *testing.T) {
 	}
 
 	CreateAndTrainModel(sentens, 0.1, 15, "model.bin")
-	t.Logf("Model created successfully from %d sentences.", len(sentens))
+	fmt.Printf("Model created successfully from %d sentences.", len(sentens))
+}
+
+func TestMakeDatasetData(t *testing.T) {
+	bd, fe := os.ReadFile("./steam.txt")
+	if fe != nil {
+		t.Fatalf("Error, %v", fe)
+	}
+
+	raw := string(bd)
+	datas := strings.Split(raw, "\n")
+
+	rand.Shuffle(len(datas), func(i, j int) {
+		datas[i], datas[j] = datas[j], datas[i]
+	})
+
+	// Limit to 8000 sentences if more are available.
+	if len(datas) > 5000 {
+		datas = datas[:5000]
+	}
+
+	CreateAndTrainModel(datas, 0.1, 5, "model_x.bin")
+	fmt.Printf("Model created successfully from %d sentences.", len(datas))
+}
+
+func TestMakeTotalData(t *testing.T) {
+	var sentens []string
+
+	fmt.Println("Inserting Sentences from outbox.json & steam.txt...")
+
+	bd, fe := os.ReadFile("./outbox.json")
+	if fe != nil {
+		t.Fatalf("Error reading outbox.json: %v", fe)
+	}
+
+	var outbox Outbox
+	xe := json.Unmarshal(bd, &outbox)
+	if xe != nil {
+		t.Fatalf("Error unmarshaling outbox.json: %v", xe)
+	}
+
+	bx, fe := os.ReadFile("./steam.txt")
+	if fe != nil {
+		t.Fatalf("Error, %v", fe)
+	}
+
+	raw := string(bx)
+	rdatas := strings.Split(raw, "\n")
+
+	rand.Shuffle(len(rdatas), func(i, j int) {
+		rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
+	})
+
+	if len(rdatas) > 5000 {
+		rdatas = rdatas[:5000]
+	}
+
+	sentens = append(sentens, rdatas...)
+
+	for _, item := range outbox.OrderedItems {
+		// Check if the RawMessage is a JSON object (starts with '{')
+		if len(item.Object) > 0 && item.Object[0] == '{' {
+			var obj Object
+			err := json.Unmarshal(item.Object, &obj)
+			if err == nil {
+				cleanedText := stripHTML(obj.Content)
+				if cleanedText != "" {
+					sentens = append(sentens, cleanedText)
+				}
+			}
+		}
+		// If item.Object is a string (URL), it's ignored.
+	}
+
+	// Shuffle the collected sentences to get a random sample.
+	rand.Shuffle(len(sentens), func(i, j int) {
+		sentens[i], sentens[j] = sentens[j], sentens[i]
+	})
+
+	// Limit to 8000 sentences if more are available.
+	if len(sentens) > 8000 {
+		sentens = sentens[:8000]
+	}
+
+	if len(sentens) == 0 {
+		t.Fatal("No sentences extracted from outbox.json")
+	}
+
+	CreateAndTrainModel(sentens, 0.01, 20, "model.bin")
+	fmt.Printf("Model created successfully from %d sentences.", len(sentens)+len(rdatas))
 }
 
 func TestLongSentense(t *testing.T) {
