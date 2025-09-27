@@ -202,14 +202,16 @@ func TestLongSentense(t *testing.T) {
 
 	selects := pick(model.Tokenizer.Count, *model.Tokenizer)
 
-	data := model.Predict(model.Tokenizer.Tokens[selects])
+	data := model.Predict(model.Tokenizer.Tokens[selects], make([]int, 0))
 	fmt.Printf("Input: %s, Predict: %s\n", selects, model.Tokenizer.GetToken(data))
 
+	var intmake []int
 	for {
-		data = model.Predict(data)
+		data = model.Predict(data, intmake)
 		if model.Tokenizer.GetToken(data) == ENDTOKEN {
 			break
 		}
+		intmake = append(intmake, data)
 		fmt.Printf("%s ", model.Tokenizer.GetToken(data))
 	}
 }

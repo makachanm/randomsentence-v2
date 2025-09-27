@@ -59,8 +59,9 @@ func softmax(input []float32) []float32 {
 	return output
 }
 
-// Predict predicts the next token index given the current token index.
-func (m *LinearModel) Predict(currentTokenIndex int) int {
+// Predict predicts the next token index given the current token index,
+// applying a penalty to previously generated tokens.
+func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int {
 	if currentTokenIndex < 0 || currentTokenIndex >= len(m.Weights) {
 		// Return a random token if the input is out of bounds
 		return rand.Intn(m.Tokenizer.Count)
@@ -69,6 +70,15 @@ func (m *LinearModel) Predict(currentTokenIndex int) int {
 	scores := m.Weights[currentTokenIndex]
 	probabilities := softmax(scores)
 
+	// Apply repetition penalty
+	repetitionPenalty := float32(1.5)
+	for _, tokenIndex := range generatedTokens {
+		if tokenIndex >= 0 && tokenIndex < len(probabilities) {
+			probabilities[tokenIndex] /= repetitionPenalty
+		}
+	}
+
+	// Select the token with the highest probability after penalty
 	maxProb := float32(-1.0)
 	predictedIndex := 0
 	for i, p := range probabilities {

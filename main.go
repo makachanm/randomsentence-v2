@@ -29,13 +29,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	generatedIndices := []int{}
+
 	selects := pick(model.Tokenizer.Count, *model.Tokenizer)
-	data := model.Predict(model.Tokenizer.Tokens[selects])
+	initialIndex := model.Tokenizer.Tokens[selects]
+	generatedIndices = append(generatedIndices, initialIndex)
+
+	data := model.Predict(initialIndex, generatedIndices)
 
 	if selects == core.ENDTOKEN || model.Tokenizer.GetToken(data) == core.ENDTOKEN {
 		selects = pick(model.Tokenizer.Count, *model.Tokenizer)
-		data = model.Predict(model.Tokenizer.Tokens[selects])
+		initialIndex = model.Tokenizer.Tokens[selects]
+		generatedIndices = []int{initialIndex}
+		data = model.Predict(initialIndex, generatedIndices)
 	}
+	generatedIndices = append(generatedIndices, data)
 
 	var content strings.Builder
 
@@ -51,10 +59,11 @@ func main() {
 			break
 		}
 		count++
-		data = model.Predict(data)
+		data = model.Predict(data, generatedIndices)
 		if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
 			break
 		}
+		generatedIndices = append(generatedIndices, data)
 		content.WriteString(model.Tokenizer.GetToken(data))
 		content.WriteString(" ")
 	}
