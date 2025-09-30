@@ -6,12 +6,14 @@ import (
 	"math/rand"
 	"runtime"
 	"time"
+
+	"github.com/kshard/float8"
 )
 
 // LinearModel represents a simple linear model for predicting the next token.
 type LinearModel struct {
-	Weights      [][]float32
-	LearningRate float32
+	Weights      [][]float8.Float8
+	LearningRate float8.Float8
 	Tokenizer    *Tokenizer
 }
 
@@ -19,42 +21,43 @@ type LinearModel struct {
 func NewLinearModel(tokenizer *Tokenizer, learningRate float32) *LinearModel {
 	rand.Seed(time.Now().UnixNano())
 	vocabSize := tokenizer.Count
-	weights := make([][]float32, vocabSize)
+	weights := make([][]float8.Float8, vocabSize)
 	for i := range weights {
-		weights[i] = make([]float32, vocabSize)
+		weights[i] = make([]float8.Float8, vocabSize)
 		for j := range weights[i] {
-			weights[i][j] = rand.Float32() - 0.5 // Initialize with small random values
+			weights[i][j] = float8.ToFloat8(rand.Float32() - 0.5) // Initialize with small random values
 		}
 	}
 
 	return &LinearModel{
 		Weights:      weights,
-		LearningRate: learningRate,
+		LearningRate: float8.ToFloat8(learningRate),
 		Tokenizer:    tokenizer,
 	}
 }
 
-// softmax applies the softmax function to a slice of float32.
-func softmax(input []float32) []float32 {
+// softmax applies the softmax function to a slice of float8.Float8.
+func softmax(input []float8.Float8) []float8.Float8 {
 	if len(input) == 0 {
-		return []float32{}
+		return []float8.Float8{}
 	}
 	maxVal := input[0]
 	for _, v := range input {
-		if v > maxVal {
+		if float8.ToFloat32(v) > float8.ToFloat32(maxVal) {
 			maxVal = v
 		}
 	}
 
-	sum := float32(0.0)
-	output := make([]float32, len(input))
+	sum := float8.ToFloat8(0.0)
+	output := make([]float8.Float8, len(input))
 	for i, v := range input {
-		output[i] = float32(math.Exp(float64(v - maxVal)))
-		sum += output[i]
+		f64val := float64(float8.ToFloat32(v) - float8.ToFloat32(maxVal))
+		output[i] = float8.ToFloat8(float32(math.Exp(f64val)))
+		sum = float8.Add(sum, output[i])
 	}
 
 	for i := range output {
-		output[i] /= sum
+		output[i] = float8.Div(output[i], sum)
 	}
 	return output
 }
@@ -70,7 +73,6 @@ func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int 
 	probabilities := softmax(scores)
 
 	// 1. Apply co-occurrence reward
-	rewardFactor := float32(0.5)
 	if freqMap, ok := m.Tokenizer.UnigramFreq[currentTokenIndex]; ok {
 		totalFreq := 0
 		for _, freq := range freqMap {
@@ -79,36 +81,37 @@ func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int 
 
 		if totalFreq > 0 {
 			for nextIdx, freq := range freqMap {
-				reward := rewardFactor * (float32(freq) / float32(totalFreq))
-				probabilities[nextIdx] *= (1.0 + reward)
+				reward := float8.Div(float8.ToFloat8(float32(totalFreq)), float8.ToFloat8(float32(freq)))
+				//one_plus_reward := float8.Add(float8.ToFloat8(1.0), reward)
+				probabilities[nextIdx] = float8.Mul(probabilities[nextIdx], reward)
 			}
 		}
 	}
 
 	// 2. Apply repetition penalty
-	repetitionPenalty := float32(1.5)
+	repetitionPenalty := float8.ToFloat8(1.5)
 	for _, tokenIndex := range generatedTokens {
 		if tokenIndex >= 0 && tokenIndex < len(probabilities) {
-			probabilities[tokenIndex] /= repetitionPenalty
+			probabilities[tokenIndex] = float8.Div(probabilities[tokenIndex], repetitionPenalty)
 		}
 	}
 
 	// 3. Re-normalize probabilities
-	var sum float32 = 0.0
+	var sum float8.Float8 = float8.ToFloat8(0.0)
 	for _, p := range probabilities {
-		sum += p
+		sum = float8.Add(sum, p)
 	}
-	if sum > 0 {
+	if float8.ToFloat32(sum) > 0 {
 		for i := range probabilities {
-			probabilities[i] /= sum
+			probabilities[i] = float8.Div(probabilities[i], sum)
 		}
 	}
 
 	// 4. Select the token with the highest probability
-	maxProb := float32(-1.0)
+	maxProb := float8.ToFloat8(-1.0)
 	predictedIndex := 0
 	for i, p := range probabilities {
-		if p > maxProb {
+		if float8.ToFloat32(p) > float8.ToFloat32(maxProb) {
 			maxProb = p
 			predictedIndex = i
 		}
@@ -127,9 +130,9 @@ func (m *LinearModel) Train(epochs int) {
 	for epoch := 0; epoch < epochs; epoch++ {
 		runtime.GC()
 		fmt.Print("Epoch:", epoch, " ")
-		gradients := make([][]float32, vocabSize)
+		gradients := make([][]float8.Float8, vocabSize)
 		for i := range gradients {
-			gradients[i] = make([]float32, vocabSize)
+			gradients[i] = make([]float8.Float8, vocabSize)
 		}
 
 		// Full-batch: calculate gradients for all data points from the UnigramMap
@@ -139,20 +142,21 @@ func (m *LinearModel) Train(epochs int) {
 			probabilities := softmax(scores)
 
 			// Calculate gradient for the scores (y_pred - y_true)
-			dScores := make([]float32, vocabSize)
+			dScores := make([]float8.Float8, vocabSize)
 			copy(dScores, probabilities)
-			dScores[nextTokenIndex] -= 1
+			dScores[nextTokenIndex] = float8.Sub(dScores[nextTokenIndex], float8.ToFloat8(1.0))
 
 			// Add to gradients for the current input token's weights
 			for j := 0; j < vocabSize; j++ {
-				gradients[currentTokenIndex][j] += dScores[j]
+				gradients[currentTokenIndex][j] = float8.Add(gradients[currentTokenIndex][j], dScores[j])
 			}
 		}
 
 		// Update weights using the accumulated gradients
 		for i := 0; i < vocabSize; i++ {
 			for j := 0; j < vocabSize; j++ {
-				m.Weights[i][j] -= m.LearningRate * gradients[i][j]
+				update := float8.Mul(m.LearningRate, gradients[i][j])
+				m.Weights[i][j] = float8.Sub(m.Weights[i][j], update)
 			}
 		}
 		fmt.Println("Done.")

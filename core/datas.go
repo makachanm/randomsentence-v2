@@ -5,23 +5,22 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+
+	"github.com/kshard/float8"
 )
 
 // CreateAndTrainModel creates a tokenizer and a model from texts, trains the model,
 // and saves it to a file using gob binary format in a memory-efficient way.
 // It now splits the data, using a portion for training and returning the rest.
-func CreateAndTrainModel(texts []string, learningRate float32, epochs int, savePath string) (*LinearModel, []string, error) {
+func CreateAndTrainModel(texts []string, learningRate float32, epochs int, savePath string) (*LinearModel, error) {
 	// Determine the split point for training data
 	rand.Shuffle(len(texts), func(i, j int) {
 		texts[i], texts[j] = texts[j], texts[i]
 	})
 
-	trainingTexts := texts[:5000]
-	remainingTexts := texts[5000:]
-
 	// 1. Create and build tokenizer using only training data
 	tokenizer := NewTokenizer()
-	for _, text := range trainingTexts {
+	for _, text := range texts {
 		tokenizer.AddtoModel(text)
 	}
 
@@ -33,10 +32,6 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 	tokenizer.BuildUnigramMap()
 
 	// Add remaining texts to tokenizer model after building the main unigram map
-	for _, text := range remainingTexts {
-		tokenizer.AddtoModel(text)
-	}
-
 	// 3. Create and train model
 	model := NewLinearModel(tokenizer, learningRate)
 	fmt.Println("Training model...")
@@ -45,7 +40,7 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 	// 4. Save to a binary file using gob, streaming the weights
 	file, err := os.Create(savePath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer file.Close()
 
@@ -53,14 +48,14 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 
 	// Encode Tokenizer
 	if err := encoder.Encode(model.Tokenizer); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Encode Weights row by row
 	fmt.Println("Saving tokens...")
 	vocabSize := model.Tokenizer.Count
 	if err := encoder.Encode(vocabSize); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	fmt.Println("Saving weights...")
 	for i := 0; i < vocabSize; i++ {
@@ -68,13 +63,13 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 			fmt.Printf("%d / %d\n", i, vocabSize)
 		}
 		if err := encoder.Encode(model.Weights[i]); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
-	fmt.Printf("Model created successfully from a total of %d sentences.", len(trainingTexts))
+	fmt.Printf("Model created successfully from a total of %d sentences.", len(texts))
 
-	return model, remainingTexts, nil
+	return model, nil
 }
 
 // LoadModel loads a model and tokenizer from a gob binary file,
@@ -101,7 +96,7 @@ func LoadModel(loadPath string, learningRate float32) (*LinearModel, error) {
 		return nil, err
 	}
 
-	weights := make([][]float32, vocabSize)
+	weights := make([][]float8.Float8, vocabSize)
 	for i := 0; i < vocabSize; i++ {
 		if err := decoder.Decode(&weights[i]); err != nil {
 			return nil, err
@@ -112,7 +107,7 @@ func LoadModel(loadPath string, learningRate float32) (*LinearModel, error) {
 	model := &LinearModel{
 		Weights:      weights,
 		Tokenizer:    &tokenizer,
-		LearningRate: learningRate,
+		LearningRate: float8.ToFloat8(learningRate),
 	}
 
 	return model, nil

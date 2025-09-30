@@ -157,7 +157,7 @@ func TestMakeTotalData(t *testing.T) {
 		rand.Shuffle(len(rdatas), func(i, j int) {
 			rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
 		})
-		sentens = append(sentens, rdatas[:3000]...)
+		sentens = append(sentens, rdatas[:5000]...)
 	}
 
 	// --- Read from kommongen_train.json ---
@@ -170,7 +170,7 @@ func TestMakeTotalData(t *testing.T) {
 			lines[i], lines[j] = lines[j], lines[i]
 		})
 		for i, line := range lines {
-			if i > 3000 {
+			if i > 8000 {
 				break
 			}
 
@@ -197,7 +197,7 @@ func TestMakeTotalData(t *testing.T) {
 	//	sentens = sentens[:10000]
 	//}
 
-	CreateAndTrainModel(sentens, 0.1, 5, "model.bin")
+	CreateAndTrainModel(sentens, 0.01, 20, "model.bin")
 }
 
 func TestLongSentense(t *testing.T) {

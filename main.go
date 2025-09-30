@@ -55,7 +55,7 @@ func main() {
 			content.WriteString(" ")
 
 			// Continue generating up to 30 more tokens.
-			for i := 0; i < 30; i++ {
+			for i := 0; i < 3; i++ {
 				data = model.Predict(data, generatedIndices)
 				if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
 					break
