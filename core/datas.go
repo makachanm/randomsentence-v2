@@ -3,7 +3,7 @@ package core
 import (
 	"encoding/gob"
 	"fmt"
-	"math"
+	"math/rand"
 	"os"
 )
 
@@ -12,15 +12,12 @@ import (
 // It now splits the data, using a portion for training and returning the rest.
 func CreateAndTrainModel(texts []string, learningRate float32, epochs int, savePath string) (*LinearModel, []string, error) {
 	// Determine the split point for training data
-	trainSize := int(math.Ceil(float64(len(texts)) * 0.3))
-	if trainSize > len(texts) {
-		trainSize = len(texts)
-	}
+	rand.Shuffle(len(texts), func(i, j int) {
+		texts[i], texts[j] = texts[j], texts[i]
+	})
 
-	fmt.Printf("Using %d for training and %d for testing.\n", trainSize, len(texts)-trainSize)
-
-	trainingTexts := texts[:trainSize]
-	remainingTexts := texts[trainSize:]
+	trainingTexts := texts[:5000]
+	remainingTexts := texts[5000:]
 
 	// 1. Create and build tokenizer using only training data
 	tokenizer := NewTokenizer()
@@ -74,6 +71,8 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 			return nil, nil, err
 		}
 	}
+
+	fmt.Printf("Model created successfully from a total of %d sentences.", len(trainingTexts))
 
 	return model, remainingTexts, nil
 }

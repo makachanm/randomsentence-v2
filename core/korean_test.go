@@ -123,72 +123,85 @@ func TestMakeDatasetData(t *testing.T) {
 func TestMakeTotalData(t *testing.T) {
 	var sentens []string
 
-	fmt.Println("Inserting Sentences from outbox.json & steam.txt...")
+	fmt.Println("Inserting Sentences from outbox.json, steam.txt, and kommongen_train.json...")
 
+	// --- Read from outbox.json ---
 	bd, fe := os.ReadFile("./outbox.json")
 	if fe != nil {
-		t.Fatalf("Error reading outbox.json: %v", fe)
-	}
-
-	var outbox Outbox
-	xe := json.Unmarshal(bd, &outbox)
-	if xe != nil {
-		t.Fatalf("Error unmarshaling outbox.json: %v", xe)
-	}
-
-	bx, fe := os.ReadFile("./steam.txt")
-	if fe != nil {
-		t.Fatalf("Error, %v", fe)
-	}
-
-	raw := string(bx)
-	rdatas := strings.Split(raw, "\n")
-
-	rand.Shuffle(len(rdatas), func(i, j int) {
-		rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
-	})
-
-	if len(rdatas) > 3000 {
-		rdatas = rdatas[:3000]
-	}
-
-	sentens = append(sentens, rdatas...)
-
-	for _, item := range outbox.OrderedItems {
-		// Check if the RawMessage is a JSON object (starts with '{')
-		if len(item.Object) > 0 && item.Object[0] == '{' {
-			var obj Object
-			err := json.Unmarshal(item.Object, &obj)
-			if err == nil {
-				cleanedText := stripHTML(obj.Content)
-				if cleanedText != "" {
-					sentens = append(sentens, cleanedText)
+		t.Logf("Could not read outbox.json: %v", fe)
+	} else {
+		var outbox Outbox
+		if err := json.Unmarshal(bd, &outbox); err != nil {
+			t.Fatalf("Error unmarshaling outbox.json: %v", err)
+		}
+		for _, item := range outbox.OrderedItems {
+			if len(item.Object) > 0 && item.Object[0] == '{' {
+				var obj Object
+				if err := json.Unmarshal(item.Object, &obj); err == nil {
+					cleanedText := stripHTML(obj.Content)
+					if cleanedText != "" {
+						sentens = append(sentens, cleanedText)
+					}
 				}
 			}
 		}
-		// If item.Object is a string (URL), it's ignored.
 	}
 
-	// Shuffle the collected sentences to get a random sample.
-	rand.Shuffle(len(sentens), func(i, j int) {
-		sentens[i], sentens[j] = sentens[j], sentens[i]
-	})
+	// --- Read from steam.txt ---
+	bx, fe := os.ReadFile("./steam.txt")
+	if fe != nil {
+		t.Logf("Could not read steam.txt: %v", fe)
+	} else {
+		raw := string(bx)
+		rdatas := strings.Split(raw, "\n")
+		rand.Shuffle(len(rdatas), func(i, j int) {
+			rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
+		})
+		sentens = append(sentens, rdatas[:3000]...)
+	}
 
-	// Limit to 8000 sentences if more are available.
-	//if len(sentens) > 3500 {
-	//	sentens = sentens[:3500]
-	//}
+	// --- Read from kommongen_train.json ---
+	kd, ke := os.ReadFile("./kommongen_train.json")
+	if ke != nil {
+		t.Logf("Could not read kommongen_train.json: %v", ke)
+	} else {
+		lines := strings.Split(string(kd), "\n")
+		rand.Shuffle(len(lines), func(i, j int) {
+			lines[i], lines[j] = lines[j], lines[i]
+		})
+		for i, line := range lines {
+			if i > 3000 {
+				break
+			}
+
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var item KommonGenItem
+			if err := json.Unmarshal([]byte(line), &item); err != nil {
+				t.Logf("Skipping malformed line in kommongen_train.json: %v", err)
+				continue
+			}
+			if item.Scene != "" {
+				sentens = append(sentens, item.Scene)
+			}
+		}
+	}
 
 	if len(sentens) == 0 {
-		t.Fatal("No sentences extracted from outbox.json")
+		t.Fatal("No sentences extracted from any data source.")
 	}
 
+	// Optional: Limit the total number of sentences.
+	//if len(sentens) > 10000 {
+	//	sentens = sentens[:10000]
+	//}
+
 	CreateAndTrainModel(sentens, 0.1, 5, "model.bin")
-	fmt.Printf("Model created successfully from %d sentences.", len(sentens))
 }
 
 func TestLongSentense(t *testing.T) {
-	model, err := LoadModel("model.bin", 0.01)
+	model, err := LoadModel("model.bin", 0.1)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -222,4 +235,66 @@ func TestLongSentense(t *testing.T) {
 		fmt.Printf("%s ", model.Tokenizer.GetToken(data))
 	}
 
+}
+
+// KommonGenItem defines the structure for an item in the kommongen_train.json file,
+// based on the user-provided example.
+type KommonGenItem struct {
+	ConceptSet string `json:"concept-set"`
+	Scene      string `json:"scene"`
+}
+
+func TestMakeKommongenData(t *testing.T) {
+	// The file 'core/kommongen_train.json' is ignored by .gitignore.
+	// Please ensure the file exists at that path.
+	bd, err := os.ReadFile("./kommongen_train.json")
+	if err != nil {
+		t.Fatalf("Error reading core/kommongen_train.json: %v. Make sure the file exists.", err)
+	}
+
+	// The file is in JSON Lines format (one JSON object per line).
+	// We need to read and parse it line by line.
+	lines := strings.Split(string(bd), "\n")
+
+	fmt.Println("Inserting Sentences from kommongen_train.json...")
+	var sentens []string
+	for i, line := range lines {
+		// Skip empty lines
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		if i > 1000 {
+			break
+		}
+
+		var item KommonGenItem
+		err := json.Unmarshal([]byte(line), &item)
+		if err != nil {
+			t.Logf("Skipping malformed line in kommongen_train.json: %v", err)
+			continue
+		}
+
+		// We use the "scene" as the sentence for training.
+		if item.Scene != "" {
+			sentens = append(sentens, item.Scene)
+		}
+	}
+
+	if len(sentens) == 0 {
+		t.Fatal("No sentences extracted from kommongen_train.json")
+	}
+
+	// You can now use the 'sentens' slice to train your model, similar to other test functions.
+	fmt.Printf("Extracted %d sentences from kommongen_train.json.\n", len(sentens))
+
+	// Example of training with the extracted data:
+	rand.Shuffle(len(sentens), func(i, j int) {
+		sentens[i], sentens[j] = sentens[j], sentens[i]
+	})
+	if len(sentens) > 5000 {
+		sentens = sentens[:5000]
+	}
+	CreateAndTrainModel(sentens, 0.1, 5, "kommongen_model.bin")
+	fmt.Printf("Model created successfully from %d sentences.", len(sentens))
 }
