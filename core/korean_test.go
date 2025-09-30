@@ -37,7 +37,12 @@ func stripHTML(htmlString string) string {
 			break // End of document
 		}
 		if tt == html.TextToken {
-			textContent.WriteString(t.Token().Data)
+			if name, _ := t.TagName(); string(name) == "a" {
+				t.Next()
+				continue // Skip links
+			} else {
+				textContent.WriteString(t.Token().Data)
+			}
 		}
 	}
 
@@ -143,8 +148,8 @@ func TestMakeTotalData(t *testing.T) {
 		rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
 	})
 
-	if len(rdatas) > 7000 {
-		rdatas = rdatas[:7000]
+	if len(rdatas) > 3000 {
+		rdatas = rdatas[:3000]
 	}
 
 	sentens = append(sentens, rdatas...)
@@ -170,16 +175,16 @@ func TestMakeTotalData(t *testing.T) {
 	})
 
 	// Limit to 8000 sentences if more are available.
-	if len(sentens) > 9500 {
-		sentens = sentens[:9500]
-	}
+	//if len(sentens) > 3500 {
+	//	sentens = sentens[:3500]
+	//}
 
 	if len(sentens) == 0 {
 		t.Fatal("No sentences extracted from outbox.json")
 	}
 
-	CreateAndTrainModel(sentens, 0.01, 15, "model.bin")
-	fmt.Printf("Model created successfully from %d sentences.", len(sentens)+len(rdatas))
+	CreateAndTrainModel(sentens, 0.1, 5, "model.bin")
+	fmt.Printf("Model created successfully from %d sentences.", len(sentens))
 }
 
 func TestLongSentense(t *testing.T) {
@@ -201,8 +206,10 @@ func TestLongSentense(t *testing.T) {
 	}
 
 	selects := pick(model.Tokenizer.Count, *model.Tokenizer)
-
+	fmt.Println(selects)
 	data := model.Predict(model.Tokenizer.Tokens[selects], make([]int, 0))
+	fmt.Println(model.Tokenizer.GetToken(data))
+
 	fmt.Printf("Input: %s, Predict: %s\n", selects, model.Tokenizer.GetToken(data))
 
 	var intmake []int
@@ -214,4 +221,5 @@ func TestLongSentense(t *testing.T) {
 		intmake = append(intmake, data)
 		fmt.Printf("%s ", model.Tokenizer.GetToken(data))
 	}
+
 }
