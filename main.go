@@ -31,37 +31,42 @@ func main() {
 
 	for {
 		generatedIndices := []int{}
-
-		selects := pick(model.Tokenizer.Count, *model.Tokenizer)
-		initialIndex := model.Tokenizer.Tokens[selects]
-		generatedIndices = append(generatedIndices, initialIndex)
-
-		data := model.Predict(initialIndex, generatedIndices)
-
-		if selects == core.ENDTOKEN || model.Tokenizer.GetToken(data) == core.ENDTOKEN {
-			selects = pick(model.Tokenizer.Count, *model.Tokenizer)
-			initialIndex = model.Tokenizer.Tokens[selects]
-			generatedIndices = []int{initialIndex}
-			data = model.Predict(initialIndex, generatedIndices)
-		}
-		generatedIndices = append(generatedIndices, data)
-
 		var content strings.Builder
 
+		// Pick an initial token, ensuring it's not the end token.
+		selects := pick(model.Tokenizer.Count, *model.Tokenizer)
+		for selects == core.ENDTOKEN {
+			selects = pick(model.Tokenizer.Count, *model.Tokenizer)
+		}
+
+		initialIndex := model.Tokenizer.Tokens[selects]
+		generatedIndices = append(generatedIndices, initialIndex)
 		content.WriteString(selects)
 		content.WriteString(" ")
-		content.WriteString(model.Tokenizer.GetToken(data))
-		content.WriteString(" ")
 
-		for i := 0; i < 30; i++ {
-			data = model.Predict(data, generatedIndices)
-			if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
-				break
-			}
+		// Make the first prediction.
+		data := model.Predict(initialIndex, generatedIndices)
+		firstPredictedToken := model.Tokenizer.GetToken(data)
+
+		// If the first predicted token is not EOT, continue generating.
+		if firstPredictedToken != core.ENDTOKEN {
 			generatedIndices = append(generatedIndices, data)
-			content.WriteString(model.Tokenizer.GetToken(data))
+			content.WriteString(firstPredictedToken)
 			content.WriteString(" ")
+
+			// Continue generating up to 30 more tokens.
+			for i := 0; i < 30; i++ {
+				data = model.Predict(data, generatedIndices)
+				if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
+					break
+				}
+				generatedIndices = append(generatedIndices, data)
+				content.WriteString(model.Tokenizer.GetToken(data))
+				content.WriteString(" ")
+			}
 		}
+		// If the first predicted token was EOT, the loop is skipped,
+		// and the content (containing just the initial token) is posted.
 
 		//content.WriteString("#GenereatedByBot")
 
