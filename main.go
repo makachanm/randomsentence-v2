@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -12,6 +14,45 @@ import (
 	"strings"
 	"time"
 )
+
+type Status struct {
+	Content string `json:"content"`
+}
+
+func getTimeline(server, key string) (string, error) {
+	apiURL := fmt.Sprintf("%s/api/v1/timelines/home", server)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+key)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to get timeline: %s, body: %s", resp.Status, string(bodyBytes))
+	}
+
+	var statuses []Status
+	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+		return "", fmt.Errorf("error decoding timeline: %v", err)
+	}
+
+	var timelineContent strings.Builder
+	for _, status := range statuses {
+		timelineContent.WriteString(status.Content)
+		timelineContent.WriteString(" ")
+	}
+
+	return timelineContent.String(), nil
+}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -29,13 +70,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	extractor := core.NewExtractor(model)
+
 	for {
 		generatedIndices := []int{}
 		var content strings.Builder
 
-		// Pick an initial token.
-		initialToken := pick(model.Tokenizer.Count, *model.Tokenizer)
-		initialIndex := model.Tokenizer.Tokens[initialToken]
+		timelineText, err := getTimeline(server, key)
+		if err != nil {
+			log.Printf("Could not get timeline: %v", err)
+		}
+
+		keywords := extractor.Extract(timelineText, 1)
+
+		var initialToken string
+		if len(keywords) > 0 {
+			initialToken = keywords[0].Token
+			fmt.Printf("Starting with keyword: %s\n", initialToken)
+		} else {
+			initialToken = pick(model.Tokenizer.Count, *model.Tokenizer)
+			fmt.Println("Could not extract keywords, starting with random token.")
+		}
+
+		initialIndex, ok := model.Tokenizer.Tokens[initialToken]
+		if !ok {
+			fmt.Println("Keyword not in tokenizer, picking random token.")
+			initialToken = pick(model.Tokenizer.Count, *model.Tokenizer)
+			initialIndex = model.Tokenizer.Tokens[initialToken]
+		}
+
 		generatedIndices = append(generatedIndices, initialIndex)
 		content.WriteString(initialToken)
 		content.WriteString(" ")
