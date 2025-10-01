@@ -33,41 +33,28 @@ func main() {
 		generatedIndices := []int{}
 		var content strings.Builder
 
-		// Pick an initial bigram token.
-		initialBigram := pick(model.Tokenizer.Count, *model.Tokenizer)
-		for !strings.Contains(initialBigram, " ") { // Ensure it's a bigram
-			initialBigram = pick(model.Tokenizer.Count, *model.Tokenizer)
-		}
-
-		initialIndex := model.Tokenizer.Tokens[initialBigram]
+		// Pick an initial token.
+		initialToken := pick(model.Tokenizer.Count, *model.Tokenizer)
+		initialIndex := model.Tokenizer.Tokens[initialToken]
 		generatedIndices = append(generatedIndices, initialIndex)
-		content.WriteString(initialBigram)
+		content.WriteString(initialToken)
 		content.WriteString(" ")
 
-		// Continue generating the sentence from the initial bigram.
-		currentToken := initialBigram
-		for i := 0; i < 30; i++ { // Generate up to 30 more tokens
-			currentIndex, exists := model.Tokenizer.GetTokenIndex(currentToken)
-			if !exists {
-				break // Stop if the current token is not in the dictionary
-			}
-
+		// Continue generating the sentence from the initial token.
+		currentIndex := initialIndex
+		for i := 0; i < 50; i++ { // Generate up to 50 more tokens
 			predictedIndex := model.Predict(currentIndex, generatedIndices)
 			predictedToken := model.Tokenizer.GetToken(predictedIndex)
 
-			if predictedToken == core.ENDTOKEN || !strings.Contains(predictedToken, " ") {
-				break // Stop at end token or if not a valid bigram
+			if predictedToken == core.ENDTOKEN {
+				break // Stop at end token
 			}
 
 			generatedIndices = append(generatedIndices, predictedIndex)
-			// Add only the second word of the predicted bigram to the content.
-			parts := strings.Split(predictedToken, " ")
-			if len(parts) > 1 {
-				content.WriteString(parts[1])
-				content.WriteString(" ")
-			}
+			content.WriteString(predictedToken)
+			content.WriteString(" ")
 
-			currentToken = predictedToken
+			currentIndex = predictedIndex
 		}
 
 		//content.WriteString("#GenereatedByBot")
