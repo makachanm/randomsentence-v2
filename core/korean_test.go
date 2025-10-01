@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -25,6 +26,11 @@ type Item struct {
 // Object struct is for unmarshaling the actual object when it's not a string.
 type Object struct {
 	Content string `json:"content"`
+}
+
+func removeURLs(text string) string {
+	re := regexp.MustCompile(`https?://[\w\d\.\-/?=#&%@]+`)
+	return re.ReplaceAllString(text, "")
 }
 
 func stripHTML(htmlString string) string {
@@ -139,6 +145,7 @@ func TestMakeTotalData(t *testing.T) {
 				var obj Object
 				if err := json.Unmarshal(item.Object, &obj); err == nil {
 					cleanedText := stripHTML(obj.Content)
+					cleanedText = removeURLs(cleanedText)
 					if cleanedText != "" {
 						sentens = append(sentens, cleanedText)
 					}
@@ -154,6 +161,9 @@ func TestMakeTotalData(t *testing.T) {
 	} else {
 		raw := string(bx)
 		rdatas := strings.Split(raw, "\n")
+		for i, line := range rdatas {
+			rdatas[i] = removeURLs(line)
+		}
 		rand.Shuffle(len(rdatas), func(i, j int) {
 			rdatas[i], rdatas[j] = rdatas[j], rdatas[i]
 		})
@@ -183,7 +193,10 @@ func TestMakeTotalData(t *testing.T) {
 				continue
 			}
 			if item.Scene != "" {
-				sentens = append(sentens, item.Scene)
+				cleanedScene := removeURLs(item.Scene)
+				if cleanedScene != "" {
+					sentens = append(sentens, cleanedScene)
+				}
 			}
 		}
 	}

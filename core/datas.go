@@ -24,9 +24,6 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 		tokenizer.AddtoModel(text)
 	}
 
-	fmt.Println("Rebuilding tokens...")
-	tokenizer.ReorderTokensByRelation()
-
 	// 2. Build the final UnigramMap from frequency counts
 	fmt.Println("Building unigram map...")
 	tokenizer.BuildUnigramMap()

@@ -33,40 +33,42 @@ func main() {
 		generatedIndices := []int{}
 		var content strings.Builder
 
-		// Pick an initial token, ensuring it's not the end token.
-		selects := pick(model.Tokenizer.Count, *model.Tokenizer)
-		for selects == core.ENDTOKEN {
-			selects = pick(model.Tokenizer.Count, *model.Tokenizer)
+		// Pick an initial bigram token.
+		initialBigram := pick(model.Tokenizer.Count, *model.Tokenizer)
+		for !strings.Contains(initialBigram, " ") { // Ensure it's a bigram
+			initialBigram = pick(model.Tokenizer.Count, *model.Tokenizer)
 		}
 
-		initialIndex := model.Tokenizer.Tokens[selects]
+		initialIndex := model.Tokenizer.Tokens[initialBigram]
 		generatedIndices = append(generatedIndices, initialIndex)
-		content.WriteString(selects)
+		content.WriteString(initialBigram)
 		content.WriteString(" ")
 
-		// Make the first prediction.
-		data := model.Predict(initialIndex, generatedIndices)
-		firstPredictedToken := model.Tokenizer.GetToken(data)
+		// Continue generating the sentence from the initial bigram.
+		currentToken := initialBigram
+		for i := 0; i < 30; i++ { // Generate up to 30 more tokens
+			currentIndex, exists := model.Tokenizer.GetTokenIndex(currentToken)
+			if !exists {
+				break // Stop if the current token is not in the dictionary
+			}
 
-		// If the first predicted token is not EOT, continue generating.
-		if firstPredictedToken != core.ENDTOKEN {
-			generatedIndices = append(generatedIndices, data)
-			content.WriteString(firstPredictedToken)
-			content.WriteString(" ")
+			predictedIndex := model.Predict(currentIndex, generatedIndices)
+			predictedToken := model.Tokenizer.GetToken(predictedIndex)
 
-			// Continue generating up to 30 more tokens.
-			for i := 0; i < 3; i++ {
-				data = model.Predict(data, generatedIndices)
-				if model.Tokenizer.GetToken(data) == core.ENDTOKEN {
-					break
-				}
-				generatedIndices = append(generatedIndices, data)
-				content.WriteString(model.Tokenizer.GetToken(data))
+			if predictedToken == core.ENDTOKEN || !strings.Contains(predictedToken, " ") {
+				break // Stop at end token or if not a valid bigram
+			}
+
+			generatedIndices = append(generatedIndices, predictedIndex)
+			// Add only the second word of the predicted bigram to the content.
+			parts := strings.Split(predictedToken, " ")
+			if len(parts) > 1 {
+				content.WriteString(parts[1])
 				content.WriteString(" ")
 			}
+
+			currentToken = predictedToken
 		}
-		// If the first predicted token was EOT, the loop is skipped,
-		// and the content (containing just the initial token) is posted.
 
 		//content.WriteString("#GenereatedByBot")
 
