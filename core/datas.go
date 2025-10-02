@@ -17,8 +17,8 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 		texts[i], texts[j] = texts[j], texts[i]
 	})
 
-	fmt.Printf("Using %d for training...\n", len(texts)/2)
-	texts = texts[:len(texts)/2]
+	fmt.Printf("Using %d for training...\n", len(texts)/3)
+	texts = texts[:len(texts)/3]
 
 	// 1. Create and build tokenizer using only training data
 	tokenizer := NewTokenizer()
@@ -33,7 +33,7 @@ func CreateAndTrainModel(texts []string, learningRate float32, epochs int, saveP
 	// 3. Create and train model with float32
 	model := NewLinearModel(tokenizer, learningRate)
 	fmt.Println("Training model...")
-	model.Train(epochs, 32) // Using a batch size of 32
+	model.Train(epochs, 2048) // Using a batch size of 32
 
 	// 4. Save to a binary file using gob, converting weights to float16 for storage
 	file, err := os.Create(savePath)
