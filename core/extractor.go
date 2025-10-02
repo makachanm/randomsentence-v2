@@ -9,7 +9,7 @@ import (
 // Keyword represents a token and its importance score.
 type Keyword struct {
 	Token string
-	Score float64
+	Score float32
 }
 
 // byScore implements sort.Interface for []Keyword based on the Score field.
@@ -57,18 +57,18 @@ func (e *Extractor) Extract(rawInput string, topK int) []Keyword {
 		tokIdx, exists := e.tokenizer.GetTokenIndex(token)
 
 		// Base score from word length
-		score := float64(len([]rune(token)))
+		score := float32(len([]rune(token)))
 
 		// Add specificity bonus
 		if exists {
 			if nextTokens, ok := e.tokenizer.UnigramFreq[tokIdx]; ok && len(nextTokens) > 0 {
-				specificity := 1.0 / float64(len(nextTokens))
+				specificity := 1.0 / float32(len(nextTokens))
 				score += specificity * 5.0 // Weight for specificity
 			}
 		}
 
 		// Penalize by frequency in the current text
-		finalScore := score / float64(freq)
+		finalScore := score / float32(freq)
 
 		candidates = append(candidates, Keyword{Token: token, Score: finalScore})
 	}

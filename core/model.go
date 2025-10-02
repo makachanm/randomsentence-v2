@@ -6,14 +6,12 @@ import (
 	"math/rand"
 	"runtime"
 	"time"
-
-	"github.com/kshard/float8"
 )
 
 // LinearModel represents a simple linear model for predicting the next token.
 type LinearModel struct {
-	Weights      [][]float8.Float8
-	LearningRate float8.Float8
+	Weights      [][]float32
+	LearningRate float32
 	Tokenizer    *Tokenizer
 }
 
@@ -21,49 +19,47 @@ type LinearModel struct {
 func NewLinearModel(tokenizer *Tokenizer, learningRate float32) *LinearModel {
 	rand.Seed(time.Now().UnixNano())
 	vocabSize := tokenizer.Count
-	weights := make([][]float8.Float8, vocabSize)
+	weights := make([][]float32, vocabSize)
 	for i := range weights {
-		weights[i] = make([]float8.Float8, vocabSize)
+		weights[i] = make([]float32, vocabSize)
 		for j := range weights[i] {
-			weights[i][j] = float8.ToFloat8(rand.Float32() - 0.5) // Initialize with small random values
+			weights[i][j] = rand.Float32() - 0.5 // Initialize with small random values
 		}
 	}
 
 	return &LinearModel{
 		Weights:      weights,
-		LearningRate: float8.ToFloat8(learningRate),
+		LearningRate: learningRate,
 		Tokenizer:    tokenizer,
 	}
 }
 
-// softmax applies the softmax function to a slice of float8.Float8.
-func softmax(input []float8.Float8) []float8.Float8 {
+// softmax applies the softmax function to a slice of float32.
+func softmax(input []float32) []float32 {
 	if len(input) == 0 {
-		return []float8.Float8{}
+		return []float32{}
 	}
 	maxVal := input[0]
 	for _, v := range input {
-		if float8.ToFloat32(v) > float8.ToFloat32(maxVal) {
+		if v > maxVal {
 			maxVal = v
 		}
 	}
 
-	sum := float8.ToFloat8(0.0)
-	output := make([]float8.Float8, len(input))
+	sum := float32(0.0)
+	output := make([]float32, len(input))
 	for i, v := range input {
-		f64val := float64(float8.ToFloat32(v) - float8.ToFloat32(maxVal))
-		output[i] = float8.ToFloat8(float32(math.Exp(f64val)))
-		sum = float8.Add(sum, output[i])
+		output[i] = float32(math.Exp(float64(v - maxVal)))
+		sum += output[i]
 	}
 
 	for i := range output {
-		output[i] = float8.Div(output[i], sum)
+		output[i] /= sum
 	}
 	return output
 }
 
-// Predict predicts the next token index given the current token index,
-// applying rewards for co-occurrence and penalties for repetition.
+// Predict predicts the next token index given the current token index.
 func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int {
 	if currentTokenIndex < 0 || currentTokenIndex >= len(m.Weights) {
 		return rand.Intn(m.Tokenizer.Count) // Out of bounds safety
@@ -72,10 +68,10 @@ func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int 
 	scores := m.Weights[currentTokenIndex]
 	probabilities := softmax(scores)
 
-	maxProb := float8.ToFloat8(-1.0)
+	maxProb := float32(-1.0)
 	predictedIndex := 0
 	for i, p := range probabilities {
-		if float8.ToFloat32(p) > float8.ToFloat32(maxProb) {
+		if p > maxProb {
 			maxProb = p
 			predictedIndex = i
 		}
@@ -83,44 +79,67 @@ func (m *LinearModel) Predict(currentTokenIndex int, generatedTokens []int) int 
 	return predictedIndex
 }
 
-// Train trains the model using full-batch gradient descent based on the Tokenizer's UnigramMap.
-func (m *LinearModel) Train(epochs int) {
-
+// Train trains the model using mini-batch gradient descent.
+func (m *LinearModel) Train(epochs int, batchSize int) {
 	vocabSize := m.Tokenizer.Count
 	if vocabSize == 0 {
 		return // Cannot train on an empty vocabulary
 	}
 
+	// Create a slice of token indices to shuffle for mini-batch
+	tokenIndices := make([]int, 0, len(m.Tokenizer.UnigramMap))
+	for k := range m.Tokenizer.UnigramMap {
+		tokenIndices = append(tokenIndices, k)
+	}
+
 	for epoch := 0; epoch < epochs; epoch++ {
 		runtime.GC()
-		fmt.Print("Epoch:", epoch, " ")
-		gradients := make([][]float8.Float8, vocabSize)
-		for i := range gradients {
-			gradients[i] = make([]float8.Float8, vocabSize)
-		}
+		fmt.Printf("Epoch: %d ", epoch)
 
-		// Full-batch: calculate gradients for all data points from the UnigramMap
-		for currentTokenIndex, nextTokenIndex := range m.Tokenizer.UnigramMap {
+		// Shuffle the training data for each epoch
+		rand.Shuffle(len(tokenIndices), func(i, j int) {
+			tokenIndices[i], tokenIndices[j] = tokenIndices[j], tokenIndices[i]
+		})
 
-			scores := m.Weights[currentTokenIndex]
-			probabilities := softmax(scores)
-
-			// Calculate gradient for the scores (y_pred - y_true)
-			dScores := make([]float8.Float8, vocabSize)
-			copy(dScores, probabilities)
-			dScores[nextTokenIndex] = float8.Sub(dScores[nextTokenIndex], float8.ToFloat8(1.0))
-
-			// Add to gradients for the current input token's weights
-			for j := 0; j < vocabSize; j++ {
-				gradients[currentTokenIndex][j] = float8.Add(gradients[currentTokenIndex][j], dScores[j])
+		// Process data in mini-batches
+		for i := 0; i < len(tokenIndices); i += batchSize {
+			end := i + batchSize
+			if end > len(tokenIndices) {
+				end = len(tokenIndices)
 			}
-		}
+			batch := tokenIndices[i:end]
 
-		// Update weights using the accumulated gradients
-		for i := 0; i < vocabSize; i++ {
+			// Accumulate gradients for the mini-batch
+			gradients := make([][]float32, vocabSize)
+			for i := range gradients {
+				gradients[i] = make([]float32, vocabSize)
+			}
+
+			for _, currentTokenIndex := range batch {
+				nextTokenIndex := m.Tokenizer.UnigramMap[currentTokenIndex]
+
+				scores := m.Weights[currentTokenIndex]
+				probabilities := softmax(scores)
+
+				// Calculate gradient for the scores (y_pred - y_true)
+				dScores := make([]float32, vocabSize)
+				copy(dScores, probabilities)
+				dScores[nextTokenIndex] -= 1.0
+
+				// Add to gradients for the current input token's weights
+				for j := 0; j < vocabSize; j++ {
+					gradients[currentTokenIndex][j] += dScores[j]
+				}
+			}
+
+			// Update weights using the accumulated gradients for the mini-batch
 			for j := 0; j < vocabSize; j++ {
-				update := float8.Mul(m.LearningRate, gradients[i][j])
-				m.Weights[i][j] = float8.Sub(m.Weights[i][j], update)
+				for k := 0; k < vocabSize; k++ {
+					if gradients[j][k] != 0 {
+						update := m.LearningRate * gradients[j][k]
+						m.Weights[j][k] -= update
+					}
+				}
 			}
 		}
 		fmt.Println("Done.")
